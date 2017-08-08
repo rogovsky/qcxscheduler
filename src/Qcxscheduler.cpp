@@ -1,12 +1,89 @@
+#include "misc_macros.h"
+#include "timeval_utils.h"
 #include "cxscheduler.h"
 
 #include "QSGNSignalManager.h"
+QSGNSignalManager g_sgn;
 
-#include "misc_macros.h"
-#include "timeval_utils.h"
-
+// ============================================================================
 
 enum {TOUT_MAGIC = 0x74756F54}; // Little-endian 'Tout'
+
+// next 4 definitions will be removed during the next upgrade steps.
+// <= from here
+typedef int sl_tid_t;
+typedef int sl_fdh_t;
+
+typedef void (*sl_tout_proc)(sl_tid_t tid,                   void *privptr);
+typedef void (*sl_fd_proc)  (sl_fdh_t fdh, int fd, int mask, void *privptr);
+// <= to here
+
+typedef struct
+{
+    int             is_used;
+    sl_tid_t        next;    // Link to next timeout
+    QSGNIntervalId  timer;
+    sl_tout_proc    cb;      // Function to call
+    void           *privptr; // Some private info
+} trec_t;
+
+static trec_t *tout_list        = NULL;
+static int     tout_list_allocd = 0;
+
+// ============================================================================
+
+enum {TOUT_ALLOC_INC = 10};
+static sl_tid_t  avl_tid = -1;
+
+static sl_tid_t  GetToutSlot(void)
+{
+  sl_tid_t  tid;
+  trec_t   *p;
+  trec_t   *new_list;
+  int       x;
+
+    if (avl_tid < 0)
+    {
+        /* Okay, let's grow the list... */
+        new_list = (trec_t *)safe_realloc(tout_list,
+                                          sizeof(trec_t)
+                                          *
+                                          (tout_list_allocd + TOUT_ALLOC_INC));
+        if (new_list == NULL) return -1;
+
+        /* ...zero-fill newly allocated space... */
+        bzero(new_list + tout_list_allocd,
+              sizeof(trec_t) * TOUT_ALLOC_INC);
+        /* ...initialize it... */
+        for (x = tout_list_allocd;  x < tout_list_allocd + TOUT_ALLOC_INC;  x++)
+            new_list[x].next = x + 1;
+        new_list[tout_list_allocd + TOUT_ALLOC_INC - 1].next = -1;
+        avl_tid = tout_list_allocd;
+        if (avl_tid == 0) avl_tid++;
+        /* ...and record its presence */
+        tout_list         = new_list;
+        tout_list_allocd += TOUT_ALLOC_INC;
+    }
+
+    tid = avl_tid;
+    p = tout_list + tid;
+    avl_tid = p->next;
+    p->is_used = 1;
+
+    return tid;
+}
+
+static void      RlsToutSlot(sl_tid_t tid)
+{
+  trec_t *p = tout_list + tid;
+
+    p->is_used = 0;
+    p->next = avl_tid;
+    avl_tid = tid;
+}
+
+// ============================================================================
+
 enum {FD_UNUSED = -1};
 
 typedef struct {
@@ -22,7 +99,7 @@ typedef struct {
 static fdrec_t* fddata        = NULL;
 static int      fddata_allocd = 0;
 
-QSGNSignalManager g_sgn;
+// ============================================================================
 
 static int FindFD(int fd)
 {
@@ -52,6 +129,7 @@ static int GrowFddata(void)
     return 0;
 }
 
+// ============================================================================
 
 /*
  *  Note:
