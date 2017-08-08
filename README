@@ -1,0 +1,38 @@
+Description:
+============
+
+Qcxscheduler is an implementation of cxscheduler interface
+under QT environment.
+
+
+Compilation instructions:
+=========================
+
+Qcxscheduler.pro - file for qmake utility to build Makefile.
+To build Qcxscheduler, run:
+
+  # under Qt3
+  qmake Qcxscheduler.pro
+
+  # under Qt4
+  qmake-qt4 Qcxscheduler.pro
+
+  make
+
+This will create .so libraries in lib/ directory. To make also static
+library, run:
+
+  make staticlib
+
+
+Addition:
+=========
+The qmake adds excess library dependencies to Makefiles.
+The following libraries can be safely removed by hand from Makefile
+before compiling:
+
+  # under Qt4
+  -lQtSql  -lQtXml  -lQtGui  -L/usr/X11R6/lib64  -lXt  -lQtNetwork  -lpthread
+
+  # under Qt3
+  -L/usr/X11R6/lib64  -lXext  -lX11
