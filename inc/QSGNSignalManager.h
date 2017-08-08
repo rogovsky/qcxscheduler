@@ -9,13 +9,8 @@
 #include "QSGNSocket.h"
 #include "QSGNTimeOut.h"
 
-#if QT_VERSION < 0x040000
-#include <qptrlist.h>
-#define QSGNList QPtrList
-#else
-#include <q3ptrlist.h>
-#define QSGNList Q3PtrList
-#endif
+#include <qlinkedlist.h>
+#define QSGNList QLinkedList
 
 class QSGNSignalManager
 {
@@ -32,8 +27,8 @@ public:
     void removeSocket(QSGNSocket* iSocket);
 
 private:
-    QSGNList <QSGNTimeOut> mTimeOuts;  // list of all registered timeouts
-    QSGNList <QSGNSocket>  mSockets;   // list of all registered sockets
+    QSGNList <QSGNTimeOut *> mTimeOuts;  // list of all registered timeouts
+    QSGNList <QSGNSocket *>  mSockets;   // list of all registered sockets
 
 private:
     QSGNSignalManager(const QSGNSignalManager&);

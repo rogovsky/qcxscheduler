@@ -17,7 +17,7 @@ isEmpty(VVERSION) {
 } else {
 
   # Qt 4
-  QT += qt3support
+  #QT += qt3support
   QT -= gui
 
   DESTDIR = lib_qt4

@@ -6,8 +6,7 @@
 
 QSGNSignalManager::QSGNSignalManager()
 {
-    mSockets.setAutoDelete(TRUE);
-    mTimeOuts.setAutoDelete(TRUE);
+
 }
 
 QSGNTimeOut* QSGNSignalManager::registerTimeOut(unsigned long iInterval,
@@ -44,7 +43,7 @@ void QSGNSignalManager::removeTimeOut(QSGNTimeOut* iTimeOut)
     }
 
     iTimeOut->removeTimeOut();      // remove internal structures
-    mTimeOuts.removeRef(iTimeOut);  // remove from list
+    mTimeOuts.removeOne(iTimeOut);  // remove from list
 }
 
 void QSGNSignalManager::removeSocket(QSGNSocket* iSocket)
@@ -54,5 +53,5 @@ void QSGNSignalManager::removeSocket(QSGNSocket* iSocket)
     }
 
     iSocket->removeSocket();       // remove internal structures
-    mSockets.removeRef(iSocket);   // remove from list
+    mSockets.removeOne(iSocket);   // remove from list
 }
