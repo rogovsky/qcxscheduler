@@ -216,10 +216,22 @@ int  sl_set_fd_mask(int fd, int mask)
     if (((mask ^ fddata[n].curmask) & SL_WR) != 0) {
         if (mask & SL_WR)
             //fddata[n].wr_id = XtAppAddInput(xh_context, fd,
-            //                                (XtPointer)XtInputWriteMask,
+            //                                (XtPointer)
+            //                                    (XtInputWriteMask |
+            //                                     (
+            //                                      (mask & SL_CE)? XtInputReadMask | XtInputExceptMask
+            //                                                    : 0
+            //                                     )
+            //                                    ),
             //                                HandleWR, (XtPointer)n);
-            fddata[n].wr_id = (QSGNInputId)g_sgn.registerSocket(fd,
-                              QSGN_SOCKET_WRITE,
+            fddata[n].wr_id = (QSGNInputId)g_sgn.registerSocket (fd,
+                              (QSGNSocketType)
+                               (QSGN_SOCKET_WRITE |
+                                (
+                                 (mask & SL_CE) ? QSGN_SOCKET_READ | QSGN_SOCKET_EXCEPTION
+                                                : 0
+                                 )
+                                ),
                               HandleWR, (QSGNPointer)n);
         else
             //XtRemoveInput(fddata[n].wr_id);
