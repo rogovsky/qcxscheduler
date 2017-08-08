@@ -7,16 +7,9 @@ QSGNSignalManager g_sgn;
 
 // ============================================================================
 
-enum {TOUT_MAGIC = 0x74756F54}; // Little-endian 'Tout'
+static sl_uniq_checker_t  uniq_checker = NULL;
 
-// next 4 definitions will be removed during the next upgrade steps.
-// <= from here
-typedef int sl_tid_t;
-typedef int sl_fdh_t;
-
-typedef void (*sl_tout_proc)(sl_tid_t tid,                   void *privptr);
-typedef void (*sl_fd_proc)  (sl_fdh_t fdh, int fd, int mask, void *privptr);
-// <= to here
+// ============================================================================
 
 typedef struct
 {
@@ -24,7 +17,9 @@ typedef struct
     sl_tid_t        next;    // Link to next timeout
     QSGNIntervalId  timer;
     sl_tout_proc    cb;      // Function to call
-    void           *privptr; // Some private info
+    int             uniq;
+    void           *privptr1; // Some private info #1
+    void           *privptr2; // Some private info #2
 } trec_t;
 
 static trec_t *tout_list        = NULL;
@@ -89,7 +84,9 @@ enum {FD_UNUSED = -1};
 typedef struct {
     int         fd;
     sl_fd_proc  cb;
-    void*       privptr;
+    int         uniq;
+    void       *privptr1;
+    void       *privptr2;
     int         curmask;
     QSGNInputId rd_id;
     QSGNInputId wr_id;
@@ -136,13 +133,17 @@ static void TimeoutProc(QSGNPointer closure, QSGNIntervalId)
     int           tid     = ptr2lint(closure);
     trec_t       *p       = tout_list + tid;
     sl_tout_proc  cb      = p->cb;
-    void         *privptr = p->privptr;
+    int           uniq     = p->uniq;
+    void         *privptr1 = p->privptr1;
+    void         *privptr2 = p->privptr2;
 
     sl_deq_tout(tid);
-    cb(tid, privptr);
+    cb(uniq, privptr1, tid, privptr2);
 }
 
-sl_tid_t  sl_enq_tout_at(struct timeval *when, sl_tout_proc cb, void *privptr)
+sl_tid_t sl_enq_tout_at(int uniq, void *privptr1,
+                        struct timeval *when,
+                        sl_tout_proc cb, void *privptr2)
 {
     sl_tid_t  tid;
     trec_t   *p;
@@ -157,7 +158,9 @@ sl_tid_t  sl_enq_tout_at(struct timeval *when, sl_tout_proc cb, void *privptr)
     p = tout_list + tid;
 
     p->cb      = cb;
-    p->privptr = privptr;
+    p->uniq     = uniq;
+    p->privptr1 = privptr1;
+    p->privptr2 = privptr2;
 
     gettimeofday(&timenow, NULL);
     if (timeval_subtract(&timediff, when, &timenow))
@@ -171,14 +174,18 @@ sl_tid_t  sl_enq_tout_at(struct timeval *when, sl_tout_proc cb, void *privptr)
     return tid;
 }
 
-sl_tid_t  sl_enq_tout_after(int usecs, sl_tout_proc cb, void *privptr)
+sl_tid_t sl_enq_tout_after(int uniq, void *privptr1,
+                           int             usecs,
+                           sl_tout_proc cb, void *privptr2)
 {
     struct timeval  when;
 
-    gettimeofday(&when, NULL);
-    timeval_add_usecs(&when, &when, usecs);
+    if (uniq_checker != NULL  &&  uniq_checker(__FUNCTION__, uniq)) return -1;
 
-    return sl_enq_tout_at(&when, cb, privptr);
+     gettimeofday(&when, NULL);
+     timeval_add_usecs(&when, &when, usecs);
+
+    return sl_enq_tout_at(uniq, privptr1, &when, cb, privptr2);
 }
 
 int sl_deq_tout(sl_tid_t tid)
@@ -200,9 +207,12 @@ int sl_deq_tout(sl_tid_t tid)
     return 0;
 }
 
-sl_fdh_t sl_add_fd(int fd, int mask, sl_fd_proc cb, void *privptr)
+sl_fdh_t sl_add_fd(int uniq, void *privptr1,
+                   int fd, int mask, sl_fd_proc cb, void *privptr2)
 {
     int  fdh;
+
+    if (uniq_checker != NULL  &&  uniq_checker(__FUNCTION__, uniq)) return -1;
 
     if (fd < 0) {
         errno = EBADF;
@@ -225,7 +235,9 @@ sl_fdh_t sl_add_fd(int fd, int mask, sl_fd_proc cb, void *privptr)
 
     fddata[fdh].fd      = fd;
     fddata[fdh].cb      = cb;
-    fddata[fdh].privptr = privptr;
+    fddata[fdh].uniq     = uniq;
+    fddata[fdh].privptr1 = privptr1;
+    fddata[fdh].privptr2 = privptr2;
     fddata[fdh].curmask = 0;
     sl_set_fd_mask(fdh, mask);
 
@@ -253,7 +265,8 @@ int sl_del_fd(sl_fdh_t fdh)
 static void HandleRD(QSGNPointer closure, int, QSGNInputId)
 {
     int  fdh = ptr2lint(closure);
-    fddata[fdh].cb(fdh, fddata[fdh].fd, SL_RD, fddata[fdh].privptr);
+    fddata[fdh].cb(fddata[fdh].uniq, fddata[fdh].privptr2,
+                   fdh, fddata[fdh].fd, SL_RD, fddata[fdh].privptr2);
 }
 
 //static void HandleWR(XtPointer     closure,
@@ -262,7 +275,8 @@ static void HandleRD(QSGNPointer closure, int, QSGNInputId)
 static void HandleWR(QSGNPointer closure, int, QSGNInputId)
 {
     int  fdh = ptr2lint(closure);
-    fddata[fdh].cb(fdh, fddata[fdh].fd, SL_WR, fddata[fdh].privptr);
+    fddata[fdh].cb(fddata[fdh].uniq, fddata[fdh].privptr2,
+                   fdh, fddata[fdh].fd, SL_WR, fddata[fdh].privptr2);
 }
 
 //static void HandleEX(XtPointer     closure,
@@ -271,7 +285,8 @@ static void HandleWR(QSGNPointer closure, int, QSGNInputId)
 static void HandleEX(QSGNPointer closure, int, QSGNInputId)
 {
     int  fdh = ptr2lint(closure);
-    fddata[fdh].cb(fdh, fddata[fdh].fd, SL_EX, fddata[fdh].privptr);
+    fddata[fdh].cb(fddata[fdh].uniq, fddata[fdh].privptr2,
+                   fdh, fddata[fdh].fd, SL_EX, fddata[fdh].privptr2);
 }
 
 int sl_set_fd_mask(sl_fdh_t fdh, int mask)
@@ -343,6 +358,31 @@ int sl_set_fd_mask(sl_fdh_t fdh, int mask)
     return 0;
 }
 
+void sl_set_uniq_checker(sl_uniq_checker_t checker)
+{
+    uniq_checker = checker;
+}
+
+void sl_do_cleanup(int uniq)
+{
+  sl_tid_t  tid;
+  int       fdh;
+
+    /* 1. Timeouts */
+    for (tid = 0;  tid < tout_list_allocd;  tid++)
+    {
+        if (tout_list[tid].is_used  &&  tout_list[tid].uniq == uniq)
+            sl_deq_tout(tid);
+    }
+
+    /* 2. File descriptors */
+    for (fdh = 0;  fdh < fddata_allocd;  fdh++)
+        if (fddata[fdh].fd != FD_UNUSED  &&  fddata[fdh].uniq == uniq)
+        {
+            close(fddata[fdh].fd);
+            sl_del_fd(fdh);
+        }
+}
 
 /*
  *  Note:
