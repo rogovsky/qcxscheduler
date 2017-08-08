@@ -4,7 +4,7 @@
 
 #include "QSGNTimeOut.h"
 
-#include <qtimer.h>
+#include <qcoreevent.h>
 
 QSGNTimeOut::QSGNTimeOut(unsigned int iInterval,
                          QSGNTimerCallbackProc iProc,
@@ -12,7 +12,7 @@ QSGNTimeOut::QSGNTimeOut(unsigned int iInterval,
     : mProc(iProc), mData(iData), mIsActive(true)
 
 {
-    QTimer::singleShot(iInterval, this, SLOT(timeout()));
+    mLocalTimer.start (iInterval, this);
 }
 
 void QSGNTimeOut::callProc() const
@@ -25,7 +25,20 @@ void QSGNTimeOut::removeTimeOut()
     mIsActive = false;
 }
 
-void QSGNTimeOut::timeout()
+void QSGNTimeOut::timerEvent(QTimerEvent *event)
+{
+    if (event->timerId () == mLocalTimer.timerId ())
+    {
+        mLocalTimer.stop ();
+        timeOut ();
+    }
+    else
+    {
+        QObject::timerEvent(event);
+    }
+}
+
+void QSGNTimeOut::timeOut()
 {
     callProc();
     removeTimeOut();  // timeout triggers only one time

@@ -8,6 +8,8 @@
 #include "QSGN.h"
 #include <qobject.h>
 
+#include <qbasictimer.h>
+
 class QSGNTimeOut : public QObject
 {
     Q_OBJECT
@@ -21,14 +23,18 @@ public:
 
     inline bool isActive() const { return mIsActive; }
 
+protected:
+    void timerEvent(QTimerEvent *event); // reimplementation of virtual QObject::timerEvent
+
+private:
+    void timeOut();
+
 private:
     QSGNTimerCallbackProc mProc;    // user callback
     QSGNPointer mData;              // user data
 
     bool mIsActive;                 // active timeout or not: non-active timeouts were already triggered.
-
-private slots:
-    void timeout();
+    QBasicTimer mLocalTimer;        // lightweight timer for single triggering
 
 private:
     QSGNTimeOut(const QSGNTimeOut&);
