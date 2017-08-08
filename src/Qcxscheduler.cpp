@@ -131,109 +131,117 @@ static int GrowFddata(void)
 
 // ============================================================================
 
-/*
- *  Note:
- *      This version utilizes the "prev" field to store XtIntervalId
- *      (since next/prev fields aren't used for list management anyway).
- */
-//static void TimeoutProc(XtPointer     closure,
-//                        XtIntervalId *id      __attribute__((unused)))
 static void TimeoutProc(QSGNPointer closure, QSGNIntervalId)
 {
-    sl_timeout_t* trec = (sl_timeout_t*) closure;
+    int           tid     = ptr2lint(closure);
+    trec_t       *p       = tout_list + tid;
+    sl_tout_proc  cb      = p->cb;
+    void         *privptr = p->privptr;
 
-    trec->magicnumber = 0;
-    trec->cb(trec);
+    sl_deq_tout(tid);
+    cb(tid, privptr);
 }
 
-int sl_enqueue_timeout_at(sl_timeout_t* trec, struct timeval* when)
+sl_tid_t  sl_enq_tout_at(struct timeval *when, sl_tout_proc cb, void *privptr)
 {
+    sl_tid_t  tid;
+    trec_t   *p;
+
     struct timeval  timenow;
     struct timeval  timediff;
     unsigned long   interval;
 
-    if (trec->magicnumber != 0) { return 1; }
-    trec->when = *when;
+    /*  */
+    tid = GetToutSlot();
+    if (tid < 0) return -1;
+    p = tout_list + tid;
+
+    p->cb      = cb;
+    p->privptr = privptr;
 
     gettimeofday(&timenow, NULL);
-    if (timeval_subtract(&timediff, when, &timenow)) {
-        trec->cb(trec);
-        return 0;
-    }
+    if (timeval_subtract(&timediff, when, &timenow))
+    interval = 1;
+    else
     interval = timediff.tv_sec * 1000 + timediff.tv_usec / 1000;
 
-//    trec->prev = lint2ptr(XtAppAddTimeOut(xh_context, interval, TimeoutProc, (XtPointer)trec));
-    trec->prev = (sl_timeout_t*)(g_sgn.registerTimeOut(interval, TimeoutProc, (QSGNPointer)trec));
+    //p->timer = XtAppAddTimeOut(xh_context, interval, TimeoutProc, (XtPointer)tid);
+    p->timer = (QSGNIntervalId)(g_sgn.registerTimeOut (interval, TimeoutProc, (QSGNPointer)tid));
 
-    trec->magicnumber = TOUT_MAGIC;
-
-    return 0;
+    return tid;
 }
 
-int  sl_enqueue_timeout_after(sl_timeout_t* trec, int usecs)
+sl_tid_t  sl_enq_tout_after(int usecs, sl_tout_proc cb, void *privptr)
 {
     struct timeval  when;
 
     gettimeofday(&when, NULL);
     timeval_add_usecs(&when, &when, usecs);
 
-    return sl_enqueue_timeout_at(trec, &when);
+    return sl_enq_tout_at(&when, cb, privptr);
 }
 
-int sl_dequeue_timeout(sl_timeout_t* trec)
+int sl_deq_tout(sl_tid_t tid)
 {
-    /* Check if it is in the list */
-    if (trec->magicnumber != TOUT_MAGIC) { return 1; }
+    trec_t   *p = tout_list + tid;
 
-//    XtRemoveTimeOut(ptr2lint(trec->prev));
-    g_sgn.removeTimeOut((QSGNTimeOut*)(trec->prev));
+    /* Check if it is used */
+    if (tid < 0  ||  tid >= tout_list_allocd  ||  p->is_used == 0)
+    {
+        errno = EINVAL;
+        return -1;
+    }
+
+    //XtRemoveTimeOut(p->timer);
+    g_sgn.removeTimeOut((QSGNTimeOut*)(p->timer));
+
+    RlsToutSlot(tid);
 
     return 0;
 }
 
-int  sl_add_fd(int fd, int mask, sl_fd_proc cb, void* privptr)
+sl_fdh_t sl_add_fd(int fd, int mask, sl_fd_proc cb, void *privptr)
 {
-    int  n;
+    int  fdh;
 
     if (fd < 0) {
         errno = EBADF;
         return -1;
     }
 
-    n = FindFD(fd);
-    if (n >= 0) {
+    fdh = FindFD(fd);
+    if (fdh >= 0) {
         errno = EINVAL;
         return -1;
     }
 
-    n = FindFD(FD_UNUSED);
-    if (n < 0) {
-        if (GrowFddata() < 0  || (n = FindFD(FD_UNUSED)) < 0) {
+    fdh = FindFD(FD_UNUSED);
+    if (fdh < 0) {
+        if (GrowFddata() < 0  || (fdh = FindFD(FD_UNUSED)) < 0) {
             errno = ENOMEM;
             return -1;
         }
     }
 
-    fddata[n].fd      = fd;
-    fddata[n].cb      = cb;
-    fddata[n].privptr = privptr;
-    fddata[n].curmask = 0;
-    sl_set_fd_mask(fd, mask);
+    fddata[fdh].fd      = fd;
+    fddata[fdh].cb      = cb;
+    fddata[fdh].privptr = privptr;
+    fddata[fdh].curmask = 0;
+    sl_set_fd_mask(fdh, mask);
 
-    return 0;
+    return fdh;
 }
 
-int  sl_del_fd(int fd)
+int sl_del_fd(sl_fdh_t fdh)
 {
-    int  n;
-
-    if (fd < 0  || (n = FindFD(fd)) < 0) {
-        errno = EBADF;
+    if (fdh < 0  ||  fdh >= fddata_allocd  ||  fddata[fdh].fd == FD_UNUSED)
+    {
+        errno = EINVAL;
         return -1;
     }
 
-    sl_set_fd_mask(fd, 0);
-    fddata[n].fd = FD_UNUSED;
+    sl_set_fd_mask(fdh, 0);
+    fddata[fdh].fd = FD_UNUSED;
 
     return 0;
 }
@@ -244,8 +252,8 @@ int  sl_del_fd(int fd)
 //                     XtInputId    *id      __attribute__((unused)))
 static void HandleRD(QSGNPointer closure, int, QSGNInputId)
 {
-    int  n = ptr2lint(closure);
-    fddata[n].cb(fddata[n].fd, SL_RD, fddata[n].privptr);
+    int  fdh = ptr2lint(closure);
+    fddata[fdh].cb(fdh, fddata[fdh].fd, SL_RD, fddata[fdh].privptr);
 }
 
 //static void HandleWR(XtPointer     closure,
@@ -253,8 +261,8 @@ static void HandleRD(QSGNPointer closure, int, QSGNInputId)
 //                     XtInputId    *id      __attribute__((unused)))
 static void HandleWR(QSGNPointer closure, int, QSGNInputId)
 {
-    int  n = ptr2lint(closure);
-    fddata[n].cb(fddata[n].fd, SL_WR, fddata[n].privptr);
+    int  fdh = ptr2lint(closure);
+    fddata[fdh].cb(fdh, fddata[fdh].fd, SL_WR, fddata[fdh].privptr);
 }
 
 //static void HandleEX(XtPointer     closure,
@@ -262,78 +270,76 @@ static void HandleWR(QSGNPointer closure, int, QSGNInputId)
 //                     XtInputId    *id      __attribute__((unused)))
 static void HandleEX(QSGNPointer closure, int, QSGNInputId)
 {
-    int  n = ptr2lint(closure);
-    fddata[n].cb(fddata[n].fd, SL_EX, fddata[n].privptr);
+    int  fdh = ptr2lint(closure);
+    fddata[fdh].cb(fdh, fddata[fdh].fd, SL_EX, fddata[fdh].privptr);
 }
 
-
-int  sl_set_fd_mask(int fd, int mask)
+int sl_set_fd_mask(sl_fdh_t fdh, int mask)
 {
-    int  n;
-
-    if (fd < 0  || (n = FindFD(fd)) < 0) {
-        errno = EBADF;
+    if (fdh < 0  ||  fdh >= fddata_allocd  ||  fddata[fdh].fd == FD_UNUSED)
+    {
+        errno = EINVAL;
         return -1;
     }
 
-    if (((mask ^ fddata[n].curmask) & SL_RD) != 0) {
+    if (((mask ^ fddata[fdh].curmask) & SL_RD) != 0) {
         if (mask & SL_RD)
-            //fddata[n].rd_id = XtAppAddInput(xh_context, fd,
-            //                                (XtPointer)XtInputReadMask,
-            //                                HandleRD, (XtPointer)n);
-            fddata[n].rd_id = (QSGNInputId)g_sgn.registerSocket(fd,
-                              QSGN_SOCKET_READ,
-                              HandleRD, (QSGNPointer)n);
+            //fddata[fdh].rd_id = XtAppAddInput(xh_context, fddata[fdh].fd,
+            //                                  (XtPointer)XtInputReadMask,
+            //                                  HandleRD, (XtPointer)fdh);
+            fddata[fdh].rd_id = (QSGNInputId)g_sgn.registerSocket(fddata[fdh].fd,
+                                QSGN_SOCKET_READ,
+                                HandleRD, (QSGNPointer)fdh);
         else
             //XtRemoveInput(fddata[n].rd_id);
         {
-            g_sgn.removeSocket((QSGNSocket*)(fddata[n].rd_id));
+            g_sgn.removeSocket((QSGNSocket*)(fddata[fdh].rd_id));
         }
     }
 
-    if (((mask ^ fddata[n].curmask) & SL_WR) != 0) {
+    if (((mask ^ fddata[fdh].curmask) & SL_WR) != 0) {
         if (mask & SL_WR)
-            //fddata[n].wr_id = XtAppAddInput(xh_context, fd,
-            //                                (XtPointer)
-            //                                    (XtInputWriteMask |
-            //                                     (
-            //                                      (mask & SL_CE)? XtInputReadMask | XtInputExceptMask
-            //                                                    : 0
-            //                                     )
-            //                                    ),
-            //                                HandleWR, (XtPointer)n);
-            fddata[n].wr_id = (QSGNInputId)g_sgn.registerSocket (fd,
-                              (QSGNSocketType)
-                               (QSGN_SOCKET_WRITE |
-                                (
-                                 (mask & SL_CE) ? QSGN_SOCKET_READ | QSGN_SOCKET_EXCEPTION
-                                                : 0
-                                 )
-                                ),
-                              HandleWR, (QSGNPointer)n);
+            //fddata[fdh].wr_id = XtAppAddInput(xh_context, fddata[fdh].fd,
+            //                                  (XtPointer)
+            //                                      (XtInputWriteMask |
+            //                                       (
+            //                                        (mask & SL_CE)? XtInputReadMask | XtInputExceptMask
+            //                                                      : 0
+            //                                       )
+            //                                      ),
+            //                                  HandleWR, (XtPointer)fdh);
+            fddata[fdh].wr_id = (QSGNInputId)g_sgn.registerSocket (fddata[fdh].fd,
+                                (QSGNSocketType)
+                                 (QSGN_SOCKET_WRITE |
+                                  (
+                                   (mask & SL_CE) ? QSGN_SOCKET_READ | QSGN_SOCKET_EXCEPTION
+                                                  : 0
+                                   )
+                                  ),
+                                HandleWR, (QSGNPointer)fdh);
         else
             //XtRemoveInput(fddata[n].wr_id);
         {
-            g_sgn.removeSocket((QSGNSocket*)(fddata[n].wr_id));
+            g_sgn.removeSocket((QSGNSocket*)(fddata[fdh].wr_id));
         }
     }
 
-    if (((mask ^ fddata[n].curmask) & SL_EX) != 0) {
+    if (((mask ^ fddata[fdh].curmask) & SL_EX) != 0) {
         if (mask & SL_EX)
-            //fddata[n].ex_id = XtAppAddInput(xh_context, fd,
-            //                                (XtPointer)XtInputExceptMask,
-            //                                HandleEX, (XtPointer)n);
-            fddata[n].ex_id = (QSGNInputId)g_sgn.registerSocket(fd,
-                              QSGN_SOCKET_EXCEPTION,
-                              HandleEX, (QSGNPointer)n);
+            //fddata[fdh].ex_id = XtAppAddInput(xh_context, fddata[fdh].fd,
+            //                                  (XtPointer)XtInputExceptMask,
+            //                                  HandleEX, (XtPointer)fdh);
+            fddata[fdh].ex_id = (QSGNInputId)g_sgn.registerSocket(fddata[fdh].fd,
+                                QSGN_SOCKET_EXCEPTION,
+                                HandleEX, (QSGNPointer)fdh);
         else
-            //XtRemoveInput(fddata[n].ex_id);
+            //XtRemoveInput(fddata[fdh].ex_id);
         {
-            g_sgn.removeSocket((QSGNSocket*)(fddata[n].ex_id));
+            g_sgn.removeSocket((QSGNSocket*)(fddata[fdh].ex_id));
         }
     }
 
-    fddata[n].curmask = mask;
+    fddata[fdh].curmask = mask;
     return 0;
 }
 
