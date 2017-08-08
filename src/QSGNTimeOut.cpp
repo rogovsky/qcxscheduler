@@ -40,6 +40,6 @@ void QSGNTimeOut::timerEvent(QTimerEvent *event)
 
 void QSGNTimeOut::timeOut()
 {
-    callProc();
     removeTimeOut();  // timeout triggers only one time
+    callProc();
 }
