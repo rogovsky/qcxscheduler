@@ -9,8 +9,7 @@
 QSGNTimeOut::QSGNTimeOut(unsigned int iInterval,
                          QSGNTimerCallbackProc iProc,
                          QSGNPointer iData)
-    : mProc(iProc), mData(iData), mIsActive(true)
-
+    : mProc(iProc), mData(iData)
 {
     mLocalTimer.start (iInterval, this);
 }
@@ -22,14 +21,13 @@ void QSGNTimeOut::callProc() const
 
 void QSGNTimeOut::removeTimeOut()
 {
-    mIsActive = false;
+    mLocalTimer.stop ();
 }
 
 void QSGNTimeOut::timerEvent(QTimerEvent *event)
 {
     if (event->timerId () == mLocalTimer.timerId ())
     {
-        mLocalTimer.stop ();
         timeOut ();
     }
     else

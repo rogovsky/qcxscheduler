@@ -21,8 +21,6 @@ public:
     void callProc() const;
     void removeTimeOut();
 
-    inline bool isActive() const { return mIsActive; }
-
 protected:
     void timerEvent(QTimerEvent *event); // reimplementation of virtual QObject::timerEvent
 
@@ -33,7 +31,6 @@ private:
     QSGNTimerCallbackProc mProc;    // user callback
     QSGNPointer mData;              // user data
 
-    bool mIsActive;                 // active timeout or not: non-active timeouts were already triggered.
     QBasicTimer mLocalTimer;        // lightweight timer for single triggering
 
 private:
