@@ -169,7 +169,7 @@ sl_tid_t sl_enq_tout_at(int uniq, void *privptr1,
     interval = timediff.tv_sec * 1000 + timediff.tv_usec / 1000;
 
     //p->timer = XtAppAddTimeOut(xh_context, interval, TimeoutProc, (XtPointer)tid);
-    p->timer = (QSGNIntervalId)(g_sgn.registerTimeOut (interval, TimeoutProc, (QSGNPointer)tid));
+    p->timer = (QSGNIntervalId)(g_sgn.registerTimeOut (interval, TimeoutProc, (QSGNPointer)lint2ptr(tid)));
 
     return tid;
 }
@@ -304,7 +304,7 @@ int sl_set_fd_mask(sl_fdh_t fdh, int mask)
             //                                  HandleRD, (XtPointer)fdh);
             fddata[fdh].rd_id = (QSGNInputId)g_sgn.registerSocket(fddata[fdh].fd,
                                 QSGN_SOCKET_READ,
-                                HandleRD, (QSGNPointer)fdh);
+                                HandleRD, (QSGNPointer)lint2ptr(fdh));
         else
             //XtRemoveInput(fddata[n].rd_id);
         {
@@ -331,7 +331,7 @@ int sl_set_fd_mask(sl_fdh_t fdh, int mask)
                                                   : 0
                                    )
                                   ),
-                                HandleWR, (QSGNPointer)fdh);
+                                HandleWR, (QSGNPointer)lint2ptr(fdh));
         else
             //XtRemoveInput(fddata[n].wr_id);
         {
@@ -346,7 +346,7 @@ int sl_set_fd_mask(sl_fdh_t fdh, int mask)
             //                                  HandleEX, (XtPointer)fdh);
             fddata[fdh].ex_id = (QSGNInputId)g_sgn.registerSocket(fddata[fdh].fd,
                                 QSGN_SOCKET_EXCEPTION,
-                                HandleEX, (QSGNPointer)fdh);
+                                HandleEX, (QSGNPointer)lint2ptr(fdh));
         else
             //XtRemoveInput(fddata[fdh].ex_id);
         {
