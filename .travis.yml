@@ -1,0 +1,27 @@
+sudo: required
+dist: trusty
+
+language: cpp
+
+env:
+  - QT_SELECT=4
+  - QT_SELECT=5
+
+compiler:
+  - gcc
+
+install:
+  - sudo apt-get -qq update
+  - sudo apt-get -qq -y install libqt4-dev qtbase5-dev qtchooser
+
+before_script:
+  - ./configure -library
+
+before_install:
+  - sudo apt-get -qq update
+  - sudo apt-get -qq -y install libqt4-dev qtbase5-dev qtchooser
+
+script:
+  - qmake
+  - make
+  - make distclean
