@@ -33,7 +33,7 @@ QMAKE_CXXFLAGS_RELEASE -= -fno-exceptions
 VERSION = 0.1
 TARGET = qcxscheduler
 
-INCLUDEPATH += inc
+INCLUDEPATH += sources/src
 
 # CX library by D. Bolkhovitanov
 CXDIR        = $$(CX_ROOT)
@@ -41,8 +41,8 @@ INCLUDEPATH += $${CXDIR}/include $${CXDIR}/include/drv_i
 LIBS        += -L$${CXDIR}/lib/ -lcda -lcx -luseful -lmisc
 
 #Input
-HEADERS += inc/QSGN.h  inc/QSGNSocket.h inc/QSGNSignalManager.h inc/QSGNTimeOut.h
-SOURCES += src/Qcxscheduler.cpp src/QSGNSocket.cpp src/QSGNSignalManager.cpp src/QSGNTimeOut.cpp
+HEADERS += sources/src/QSGN.h  sources/src/QSGNSocket.h sources/src/QSGNSignalManager.h sources/src/QSGNTimeOut.h
+SOURCES += sources/src/Qcxscheduler.cpp sources/src/QSGNSocket.cpp sources/src/QSGNSignalManager.cpp sources/src/QSGNTimeOut.cpp
 
 OTHER_FILES += \
     README
