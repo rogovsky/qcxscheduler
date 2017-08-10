@@ -7,8 +7,9 @@ qcxscheduler-uselib : !qcxscheduler-buildlib {
     LIBS += -L$$QCXSCHEDULER_LIBDIR -l$$QCXSCHEDULER_LIBNAME
 } else {
     # In nearest future we put the needes cx-headers to the repository, so this cx-variables will be removed
-    CXDIR        = $$(CX_ROOT)
-    INCLUDEPATH += $${CXDIR}/include
+    #CXDIR        = $$(CX_ROOT)
+    #INCLUDEPATH += $${CXDIR}/include
+    INCLUDEPATH += ../3rd_party/cx/include
 
     # This libs is only needed for final linking the library with application
     #LIBS        += -L$${CXDIR}/lib/ -lcda -lcx -luseful -lmisc
