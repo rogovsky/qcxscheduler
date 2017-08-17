@@ -31,3 +31,11 @@ win32 {
     qcxscheduler-buildlib : shared : DEFINES += QCXSCHEDULER_EXPORT
     else : qcxscheduler-uselib : DEFINES += QCXSCHEDULER_IMPORT
 }
+
+# ==============================================================================
+
+OBJECTS_DIR = dir.obj
+MOC_DIR     = dir.moc
+UI_DUR      = dir.ui
+
+# ==============================================================================
