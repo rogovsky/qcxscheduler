@@ -350,6 +350,7 @@ int sl_set_fd_mask(sl_fdh_t fdh, int mask)
             //                                       )
             //                                      ),
             //                                  HandleWR, (XtPointer)fdh);
+#if 0       /* !!!!! This code is UN-workable under Qt, because SL_CE feature added for the Xt environment only as a bugfix. */
             fddata[fdh].wr_id = (QSGNInputId)g_sgn.registerSocket (fddata[fdh].fd,
                                 (QSGNSocketType)
                                  (QSGN_SOCKET_WRITE |
@@ -359,6 +360,11 @@ int sl_set_fd_mask(sl_fdh_t fdh, int mask)
                                    )
                                   ),
                                 HandleWR, (QSGNPointer)lint2ptr(fdh));
+#else       /* !!!!! This code is workable under Qt. */
+            fddata[fdh].wr_id = (QSGNInputId)g_sgn.registerSocket (fddata[fdh].fd,
+                                QSGN_SOCKET_WRITE,
+                                HandleWR, (QSGNPointer)lint2ptr(fdh));
+#endif
         else
             //XtRemoveInput(fddata[n].wr_id);
         {
