@@ -177,6 +177,8 @@ sl_tid_t sl_enq_tout_at(int uniq, void *privptr1,
     struct timeval  timediff;
     unsigned long   interval;
 
+    if (uniq_checker != NULL  &&  uniq_checker(__FUNCTION__, uniq)) return -1;
+
     /*  */
     tid = GetToutSlot();
     if (tid < 0) return -1;
