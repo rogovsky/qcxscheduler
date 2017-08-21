@@ -1,27 +1,53 @@
+########################################################################
+## Travis CI config for Qcxscheduler
+##
+## Steps:
+## * installs '3rdparty' from source
+## * confirms build and install
+########################################################################
+
 sudo: required
 dist: trusty
 
 language: cpp
+compiler: gcc
 
 env:
+  global:
+    - INSTALL_PREFIX=/tmp
+  matrix:
   - QT_SELECT=4
   - QT_SELECT=5
 
-compiler:
-  - gcc
+before_install:
+  # regular ubuntu packages
+  - sudo add-apt-repository main
+  - sudo add-apt-repository universe
+
+  # update after package changes
+  - sudo apt-get -qq update
 
 install:
+  # Requirements for cx4
+  - sudo apt-get install -qq -y libmotif-dev
+
+  # Qt development files
   - sudo apt-get -qq update
   - sudo apt-get -qq -y install libqt4-dev qtbase5-dev qtchooser
 
 before_script:
-  - ./configure -library
-
-before_install:
-  - sudo apt-get -qq update
-  - sudo apt-get -qq -y install libqt4-dev qtbase5-dev qtchooser
+  - pushd 3rd_party
+  - git clone https://github.com/femanov/CXv4.git
+  #- pushd CXv4/4cx/src
+  #- make && make install
+  #- popd
+  - popd
 
 script:
-  - qmake
+  - ./configure -library
+  - mkdir build && cd build
+  - qmake ..
   - make
+  - ls -la
+  - ls -la ..
   - make distclean
